@@ -1,10 +1,13 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Path, Query, Body
 from enum import Enum
-from typing import Optional, List
-from pydantic import BaseModel
+from typing import Optional, List, Union
+from pydantic import BaseModel, Field, HttpUrl
 import os
 import django
 from fastapi import HTTPException
+from pydantic import AfterValidator
+from typing import Annotated, Literal
+import random
 
 # --- CONFIGURACIÓN DE DJANGO ---
 # Es crucial que esto se ejecute antes de importar los modelos
@@ -45,14 +48,17 @@ async def get_model(model_name: ModelName):
 # ---------- QUERY PARAMETERS ----------
 fake_items_db = [{"item_name": "Foo"}, {"item_name": "Bar"}, {"item_name": "Baz"}]
 
+"""
 @app.get("/items/")
 async def read_items(skip: int = 0, limit: int = 10):
     return fake_items_db[skip: skip + limit]
+
 
 @app.get("/items/{item_id}")
 async def read_user_item(item_id: str, needy: str, skip: int = 0, limit: Optional[int] = None):
     item = {"item_id": item_id, "needy": needy, "skip": skip, "limit": limit}
     return item
+"""
 
 class ItemSchemaIn(BaseModel):
     name: str
@@ -105,3 +111,111 @@ def read_single_item(item_id: int):
 def suma_store():
     total = sum(i.price for i in DjangoItem.objects.all())
     return {"total_price": total}
+
+# ----- Validator -----
+
+data = {
+    "isbn-9781529046137": "The Hitchhiker's Guide to the Galaxy",
+    "imdb-tt0371724": "The Hitchhiker's Guide to the Galaxy",
+    "isbn-9781439512982": "Isaac Asimov: The Complete Stories, Vol. 2",
+}
+
+
+def check_valid_id(id: str):
+    if not id.startswith(("isbn-", "imdb-")):
+        raise ValueError('Invalid ID format, it must start with "isbn-" or "imdb-"')
+    return id
+
+"""
+@app.get("/items/")
+async def read_items(
+    id: Annotated[str | None, AfterValidator(check_valid_id)] = None,
+):
+    if id:
+        item = data.get(id)
+    else:
+        id, item = random.choice(list(data.items()))
+    return {"id": id, "name": item}
+"""
+
+@app.get("/items/{item_id}")
+async def read_items(
+    *,
+    item_id: Annotated[int, Path(title="The ID of the item to get", ge=0, le=1000)],
+    q: str, #obligatorio porque no tiene valor por defecto
+    size: Annotated[float, Query(gt=0, lt=10.5)],##obligatorio porque no tiene valor por defecto
+):
+    results = {"item_id": item_id}
+    if q:
+        results.update({"q": q})
+    if size:
+        results.update({"size": size})
+    return results
+
+class FilterParams(BaseModel):
+    limit: int = Field(100, gt=0, le=100)
+    offset: int = Field(0, ge=0)
+    order_by: Literal["created_at", "updated_at"] = "created_at"
+    tags: list[str] = []
+
+
+@app.get("/items/")
+async def read_items(filter_query: Annotated[FilterParams, Query()]):
+    return filter_query
+
+#multiple Body 
+
+class Item1(BaseModel): # un Body
+    name: str
+    description: str | None = None
+    price: float
+    tax: float | None = None
+
+
+class User(BaseModel): #otro body
+    username: str
+    full_name: str | None = None
+
+
+@app.put("/body/items/{item_id}")
+async def update_item(
+    item_id: int, item: Item1, user: User, importance: Annotated[int, Body()] #llamo a body para que no sea un parametro
+):
+    results = {"item_id": item_id, "item": item, "user": user, "importance": importance}
+    return results
+
+#Field 
+
+class Item2(BaseModel):
+    name: str
+    description: str | None = Field(
+        default=None, title="The description of the item", max_length=300
+    )
+    price: float = Field(gt=0, description="The price must be greater than zero")
+    tax: float | None = None
+
+
+@app.put("/field/items/{item_id}")
+async def update_item1(item_id: int, item: Annotated[Item2, Body(embed=True)]):
+    results = {"item_id": item_id, "item": item}
+    return results
+
+# Nested Models
+
+class Image(BaseModel):
+    url: HttpUrl
+    name: str
+
+class ItemNested(BaseModel):
+    name: str
+    description: Union[str, None] = None
+    price: float
+    tax: Union[float, None] = None
+    tags: set[str] = set()
+    images: list[Image] | None = None
+
+
+@app.put("/Nested/items/{item_id}")
+async def update_item_nested(item_id: int, item: ItemNested):
+    results = {"item_id": item_id, "item": item}
+    return results
