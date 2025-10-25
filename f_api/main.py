@@ -492,3 +492,10 @@ async def read_item(item_id: str):
 @app.post("/status/items/", status_code=201)
 async def create_item(name: str):
     return {"name": name}
+
+    """100 - 199 son para "Información".
+    200 - 299 son para "Éxito".
+    300 - 399 son para "Redirección".
+    400 - 499 son para "Errores del cliente".
+    500 - 599 son para "Errores del servidor".
+    """
