@@ -1,0 +1,13 @@
+# 🚀 Proyecto FastAPI con Integración Django ORM
+
+Este proyecto implementa una API completa desarrollada con **FastAPI**, integrando el **ORM de Django** como capa de persistencia de datos. Se construyeron múltiples funcionalidades para mostrar el potencial de FastAPI al manejar modelos de datos, validaciones, respuestas personalizadas, y estructuras complejas en endpoints reales.
+
+Durante el desarrollo, se configuró la conexión entre Django y FastAPI para aprovechar los modelos del ORM de Django dentro de la aplicación FastAPI. Se implementaron endpoints para crear, listar y consultar registros en la base de datos, junto con validaciones avanzadas en parámetros de ruta, consulta y cuerpo. Se añadieron modelos anidados, enumeraciones, y diferentes tipos de respuesta con `response_model` para controlar qué información se expone al cliente.
+
+Además, se integraron ejemplos prácticos del uso de `Field`, `Annotated`, `Literal`, y tipos avanzados como `UUID`, `datetime`, `timedelta` y `time`. Se incluyó la lectura de cookies y encabezados HTTP, así como respuestas personalizadas y redirecciones con `RedirectResponse`. También se implementaron modelos de usuario con versiones separadas para entrada, salida y almacenamiento interno, usando herencia para evitar duplicación de código. Se añadieron validaciones y conversiones automáticas con Pydantic, junto con el uso del operador `**` para desempaquetar diccionarios al crear objetos (`**user_in.dict()`).
+
+El proyecto demuestra el manejo de múltiples cuerpos en una sola petición (`Body`), modelos anidados, listas de objetos, y validaciones de datos tanto simples como complejas. Se exploraron modelos tipo `Union` para permitir diferentes estructuras de respuesta según el tipo de dato, así como el uso de códigos de estado HTTP específicos como `201 Created` o `400 Bad Request`.  
+
+También se desarrolló un CRUD completo con el ORM de Django, que incluye endpoints para crear, listar, obtener y sumar registros, mostrando cómo combinar FastAPI con Django de forma eficiente. Se trabajó en la estructura del proyecto para mantener una separación clara entre la lógica de negocio y los modelos de datos, manteniendo una arquitectura limpia y extensible.
+
+En conjunto, este proyecto resume el uso profesional de **FastAPI con Django ORM**, integrando validaciones, serialización, respuestas estructuradas, y manejo avanzado de datos en un entorno moderno de desarrollo backend. Refleja el dominio de conceptos clave como tipado, validaciones con Pydantic, herencia de modelos, estructuras anidadas, manejo de peticiones HTTP, y la combinación efectiva de dos frameworks potentes del ecosistema Python.
