@@ -1,13 +1,16 @@
-from fastapi import FastAPI, Path, Query, Body
+from fastapi import FastAPI, Path, Query, Body, Cookie, Header, Response
+from fastapi.responses import JSONResponse, RedirectResponse
 from enum import Enum
-from typing import Optional, List, Union
-from pydantic import BaseModel, Field, HttpUrl
+from typing import Any, Optional, List, Union
+from pydantic import BaseModel, Field, HttpUrl, EmailStr
 import os
 import django
 from fastapi import HTTPException
 from pydantic import AfterValidator
 from typing import Annotated, Literal
 import random
+from datetime import datetime, time, timedelta
+from uuid import UUID
 
 # --- CONFIGURACIÓN DE DJANGO ---
 # Es crucial que esto se ejecute antes de importar los modelos
@@ -219,3 +222,273 @@ class ItemNested(BaseModel):
 async def update_item_nested(item_id: int, item: ItemNested):
     results = {"item_id": item_id, "item": item}
     return results
+
+# ------EXAMPLES --------
+
+class ItemExample(BaseModel):
+    name: str = Field(examples=["Foo"])
+    description: str | None = Field(default=None, examples=["A very nice Item"])
+    price: float = Field(examples=[35.4])
+    tax: float | None = Field(default=None, examples=[3.2])
+
+
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "name": "Foo",
+                    "description": "A very nice Item",
+                    "price": 35.4,
+                    "tax": 3.2,
+                }
+            ]
+        }
+    }
+    
+@app.put("/example/items/{item_id}")
+async def update_item(item_id: int, item: ItemExample):
+    results = {"item_id": item_id, "item": item}
+    return results
+
+# ---------- Extra types
+
+@app.put("/extra/items/{item_id}")
+async def read_items(
+    item_id: UUID,
+    start_datetime: Annotated[datetime, Body()],
+    end_datetime: Annotated[datetime, Body()],
+    process_after: Annotated[timedelta, Body()],
+    repeat_at: Annotated[time | None, Body()] = None,
+):
+    start_process = start_datetime + process_after
+    duration = end_datetime - start_process
+    return {
+        "item_id": item_id,
+        "start_datetime": start_datetime,
+        "end_datetime": end_datetime,
+        "process_after": process_after,
+        "repeat_at": repeat_at,
+        "start_process": start_process,
+        "duration": duration,
+    }
+
+# ---------- Cookies ----------
+@app.get("/cookie/items/")
+async def read_items(ads_id: Annotated[str | None, Cookie()] = None):
+    return {"ads_id": ads_id}
+
+# ---------- Headers ----------
+@app.get("/header/items/")
+async def read_items(
+    strange_header: Annotated[str | None, Header(convert_underscores=False)] = None,
+):
+    return {"strange_header": strange_header}
+
+# ---------- Response Models ----------
+class ItemResponse(BaseModel):
+    name: str
+    description: str | None = None
+    price: float
+    tax: float | None = None
+    tags: list[str] = []
+
+
+@app.post("/items/", response_model=ItemResponse)
+async def create_item(item: ItemResponse) -> Any:
+    return item
+
+
+@app.get("/items/", response_model=list[ItemResponse])
+async def read_items() -> Any:
+    return [
+        {"name": "Portal Gun", "price": 42.0},
+        {"name": "Plumbus", "price": 32.0},
+    ]
+
+# --------- response model and filtering ---------
+class BaseUser(BaseModel):
+    username: str
+    email: EmailStr
+    full_name: str | None = None
+
+
+class UserIn(BaseUser):
+    password: str
+
+
+@app.post("/user/")
+async def create_user(user: UserIn) -> BaseUser:
+    return user
+
+# ---------- Response Directly ----------
+
+@app.get("/portal", response_model=None)
+async def get_portal(teleport: bool = False) -> Response | dict:
+    if teleport:
+        return RedirectResponse(url="https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+    return {"message": "Here's your interdimensional portal."}
+
+# ---------- Encode parameters ----------
+
+class ItemEncode(BaseModel):
+    name: str
+    description: str | None = None
+    price: float
+    tax: float = 10.5
+    tags: list[str] = []
+
+
+items = {
+    "foo": {"name": "Foo", "price": 50.2},
+    "bar": {"name": "Bar", "description": "The bartenders", "price": 62, "tax": 20.2},
+    "baz": {"name": "Baz", "description": None, "price": 50.2, "tax": 10.5, "tags": []},
+}
+
+
+@app.get("/encode/items/{item_id}", response_model=ItemEncode, response_model_exclude_unset=True)
+async def read_item(item_id: str):
+    return items[item_id]
+
+#----------- Response_model_include / exclude ----------
+
+class ItemInclude(BaseModel):
+    name: str
+    description: str | None = None
+    price: float
+    tax: float = 10.5
+
+
+items = {
+    "foo": {"name": "Foo", "price": 50.2},
+    "bar": {"name": "Bar", "description": "The Bar fighters", "price": 62, "tax": 20.2},
+    "baz": {
+        "name": "Baz",
+        "description": "There goes my baz",
+        "price": 50.2,
+        "tax": 10.5,
+    },
+}
+
+
+@app.get(
+    "/include/items/{item_id}/name",
+    response_model=ItemInclude,
+    response_model_include={"name", "description"},
+)
+async def read_item_name(item_id: str):
+    return items[item_id]
+
+
+@app.get("/include/items/{item_id}/public", response_model=ItemInclude, response_model_exclude={"tax"})
+async def read_item_public_data(item_id: str):
+    return items[item_id]
+
+# ---------- Multiple Models ----------
+
+class UserInMultiples(BaseModel):
+    username: str
+    password: str
+    email: EmailStr
+    full_name: str | None = None
+
+
+class UserOutMultiples(BaseModel):
+    username: str
+    email: EmailStr
+    full_name: str | None = None
+
+
+class UserInDBMultiples(BaseModel):
+    username: str
+    hashed_password: str
+    email: EmailStr
+    full_name: str | None = None
+
+
+def fake_password_hasher(raw_password: str):
+    return "supersecret" + raw_password
+
+
+def fake_save_user(user_in: UserInMultiples):
+    hashed_password = fake_password_hasher(user_in.password)
+    user_in_db = UserInDBMultiples(**user_in.dict(), hashed_password=hashed_password)
+    print("User saved! ..not really")
+    return user_in_db
+
+
+@app.post("/multiples/user/", response_model=UserOutMultiples)
+async def create_user(user_in: UserInMultiples):
+    user_saved = fake_save_user(user_in)
+    return user_saved
+
+# ---------- Reduce Duplication ----------
+
+class UserBaseReduce(BaseModel):
+    username: str
+    email: EmailStr
+    full_name: str | None = None
+
+
+class UserInReduce(UserBaseReduce):
+    password: str
+
+
+class UserOutReduce(UserBaseReduce):
+    pass
+
+
+class UserInDBReduce(UserBaseReduce):
+    hashed_password: str
+
+
+def fake_password_hasher(raw_password: str):
+    return "supersecret" + raw_password
+
+
+def fake_save_user(user_in: UserInReduce):
+    hashed_password = fake_password_hasher(user_in.password)
+    user_in_db = UserInDBReduce(**user_in.dict(), hashed_password=hashed_password)
+    print("User saved! ..not really")
+    return user_in_db
+
+
+@app.post("/reduce/user/", response_model=UserOutReduce)
+async def create_user(user_in: UserInReduce):
+    user_saved = fake_save_user(user_in)
+    return user_saved
+
+# ----------- Union anyof ------------
+
+class BaseItem(BaseModel):
+    description: str
+    type: str
+
+
+class CarItem(BaseItem):
+    type: str = "car"
+
+
+class PlaneItem(BaseItem):
+    type: str = "plane"
+    size: int
+
+
+items = {
+    "item1": {"description": "All my friends drive a low rider", "type": "car"},
+    "item2": {
+        "description": "Music is my aeroplane, it's my aeroplane",
+        "type": "plane",
+        "size": 5,
+    },
+}
+
+@app.get("/union/items/{item_id}", response_model=Union[PlaneItem, CarItem])
+async def read_item(item_id: str):
+    return items[item_id]
+
+# ---------- Status Codes ----------
+
+@app.post("/status/items/", status_code=201)
+async def create_item(name: str):
+    return {"name": name}
